@@ -104,6 +104,7 @@ let contacts=JSON.parse(localStorage.getItem(STORE)||'null')||[
   {id:2,name:'Mike Chen',phone:'+14155559823',tags:['friend','key'],lastNote:'Training for his first marathon in April',lastContact:'2026-01-15',reminderDays:30},
 ];
 let expanded=null,messages={},currentView='dashboard',editingNote=null,showForm=false,search='';
+let msgTab={}; // {id: 'ai' | 'own'}
 let apiKey=localStorage.getItem('wa-crm-apikey')||'';
 let notifPermission=localStorage.getItem('wa-notif')||'default';
 let formTags=[];
@@ -130,7 +131,8 @@ async function generateMessage(id){
   render();
 }
 
-function toggleExpand(id){expanded=expanded===id?null:id;editingNote=null;render();}
+function toggleExpand(id){expanded=expanded===id?null:id;editingNote=null;if(!msgTab[id])msgTab[id]='ai';render();}
+function switchTab(id,tab){msgTab[id]=tab;render();}
 function toggleTag(id,t){const c=contacts.find(x=>x.id===id);c.tags=c.tags.includes(t)?c.tags.filter(x=>x!==t):[...c.tags,t];save();render();}
 function markContacted(id){contacts.find(x=>x.id===id).lastContact=new Date().toISOString().split('T')[0];save();render();}
 function updateFrequency(id,days){contacts.find(x=>x.id===id).reminderDays=parseInt(days);save();render();}
@@ -261,30 +263,33 @@ function contactRowHTML(c){
         <div class="btn-row"><button class="btn btn-save" onclick="saveNote(${c.id})">Save</button>
         <button class="btn btn-cancel" onclick="editingNote=null;render()">Cancel</button></div>`
       :`<div class="note-box ${c.lastNote?'has-note':''}" onclick="editingNote=${c.id};render()">${c.lastNote||'Add a note...'}</div>`;
+    const tab=msgTab[c.id]||'ai';
     const waBtn=`<button class="btn-wa" onclick="sendWA(${c.id})">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
         Send on WhatsApp</button>`;
-    const msgHTML=msg?`<div class="msg-box">
-      <div class="msg-label">AI MESSAGE</div>
-      <textarea class="msg-edit" id="msg-${c.id}">${msg==='...'?'Generating...':msg}</textarea>
-      ${msg!=='...'?waBtn:''}
-      </div>`:'';
-    const ownMsgHTML=`<div class="msg-box" style="margin-top:8px">
-      <div class="msg-label" style="color:#25D366">YOUR MESSAGE</div>
-      <textarea class="msg-edit" id="own-${c.id}" placeholder="Type your own message here..."></textarea>
+    const tabBar=`<div style="display:flex;gap:0;margin-top:12px;border-radius:8px;overflow:hidden;border:1px solid #334155">
+      <button onclick="switchTab(${c.id},'ai')" style="flex:1;padding:7px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:${tab==='ai'?'#6366f1':'#1e293b'};color:${tab==='ai'?'#fff':'#64748b'}">✨ AI Message</button>
+      <button onclick="switchTab(${c.id},'own')" style="flex:1;padding:7px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:${tab==='own'?'#25D366':'#1e293b'};color:${tab==='own'?'#fff':'#64748b'}">✍️ Write Yourself</button>
+    </div>`;
+    const aiPanel=tab==='ai'?`<div class="msg-box" style="border-top:none;border-radius:0 0 10px 10px;margin-top:0">
+      <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''} style="width:100%;margin-bottom:${msg?'10px':'0'}">✨ ${msg==='...'?'Writing...':'Generate Message'}</button>
+      ${msg&&msg!=='...'?`<textarea class="msg-edit" id="msg-${c.id}">${msg}</textarea>${waBtn}`:''} 
+    </div>`:'';
+    const ownPanel=tab==='own'?`<div class="msg-box" style="border-top:none;border-radius:0 0 10px 10px;margin-top:0">
+      <textarea class="msg-edit" id="own-${c.id}" placeholder="Type your message here..."></textarea>
       <button class="btn-wa" onclick="sendOwnWA(${c.id})" style="background:#1a9e4a">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
         Send on WhatsApp</button>
-      </div>`;
+    </div>`:'';
     expandHTML=`<div class="expand">
       <div class="section-label">TAGS</div><div class="tags-row">${tagsHTML}</div>
       ${freqHTML}
       <div class="section-label">LAST INTERACTION</div>${noteHTML}
       <div class="btn-row">
-        <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''}>✨ ${msg==='...'?'Writing...':'AI Message'}</button>
         <button class="btn btn-contacted" onclick="markContacted(${c.id})">✓ Contacted</button>
         <button class="btn btn-delete" onclick="deleteContact(${c.id})">🗑</button>
-      </div>${msgHTML}${ownMsgHTML}
+      </div>
+      ${tabBar}${aiPanel}${ownPanel}
     </div>`;
   }
   return`<div class="contact-wrap ${isExp?'open':''}" id="cw-${c.id}">
