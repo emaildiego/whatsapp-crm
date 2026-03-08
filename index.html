@@ -51,6 +51,7 @@
     .btn-ai{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;flex:1;min-width:120px}
     .btn-contacted{background:#22c55e22;border:1px solid #22c55e44 !important;color:#22c55e}
     .btn-delete{background:#ef444411;border:1px solid #ef444433 !important;color:#ef4444}
+    .btn-edit{background:#f59e0b22;border:1px solid #f59e0b44 !important;color:#f59e0b}
     .btn-save{background:#6366f1;color:#fff}
     .btn-cancel{background:#1e293b;color:#64748b}
     .msg-tab-bar{display:flex;gap:0;margin-top:12px;border-radius:8px 8px 0 0;overflow:hidden;border:1px solid #334155;border-bottom:none}
@@ -76,6 +77,7 @@
     #settings-panel h3{font-size:13px;font-weight:700;margin-bottom:4px}
     #settings-panel p{font-size:11px;color:#64748b;margin-bottom:10px;line-height:1.6}
     #settings-panel a{color:#6366f1}
+    .edit-card{background:#0f172a;border:1px solid #f59e0b55;border-radius:10px;padding:12px;margin-bottom:12px}
   </style>
 </head>
 <body>
@@ -104,7 +106,7 @@ let contacts=JSON.parse(localStorage.getItem(STORE)||'null')||[
   {id:1,name:'Sarah Johnson',phone:'+14155552671',tags:['work','key'],lastNote:'Just got promoted to VP of Marketing',lastContact:'2026-02-01',reminderDays:30},
   {id:2,name:'Mike Chen',phone:'+14155559823',tags:['friend','key'],lastNote:'Training for his first marathon in April',lastContact:'2026-01-15',reminderDays:30},
 ];
-let expanded=null,messages={},msgTab={},currentView='dashboard',editingNote=null,showForm=false,search='';
+let expanded=null,messages={},msgTab={},currentView='dashboard',editingNote=null,editingContact=null,showForm=false,search='';
 let apiKey=localStorage.getItem('wa-crm-apikey')||'';
 let notifPermission=localStorage.getItem('wa-notif')||'default';
 let formTags=[];
@@ -133,13 +135,32 @@ async function generateMessage(id){
   render();
 }
 
-function toggleExpand(id){expanded=expanded===id?null:id;editingNote=null;if(!msgTab[id])msgTab[id]='ai';render();}
+function toggleExpand(id){
+  if(editingContact===id)return; // don't collapse while editing
+  expanded=expanded===id?null:id;
+  editingNote=null;editingContact=null;
+  if(!msgTab[id])msgTab[id]='ai';
+  render();
+}
 function switchTab(id,tab){msgTab[id]=tab;render();}
 function toggleTag(id,t){const c=contacts.find(x=>x.id===id);c.tags=c.tags.includes(t)?c.tags.filter(x=>x!==t):[...c.tags,t];save();render();}
 function markContacted(id){contacts.find(x=>x.id===id).lastContact=new Date().toISOString().split('T')[0];save();render();}
 function updateFrequency(id,days){contacts.find(x=>x.id===id).reminderDays=parseInt(days);save();render();}
 function deleteContact(id){if(!confirm('Delete this contact?'))return;contacts=contacts.filter(x=>x.id!==id);if(expanded===id)expanded=null;save();render();}
 function saveNote(id){const ta=document.getElementById('note-ta');if(ta)contacts.find(x=>x.id===id).lastNote=ta.value;editingNote=null;save();render();}
+
+// ── Edit contact ──────────────────────────────────────────────────────────
+function startEditContact(id){editingContact=id;editingNote=null;render();}
+function cancelEditContact(){editingContact=null;render();}
+function saveEditContact(id){
+  const name=document.getElementById('ec-name').value.trim();
+  const phone=document.getElementById('ec-phone').value.trim();
+  const days=parseInt(document.getElementById('ec-days').value)||30;
+  if(!name||!phone){alert('Name and phone are required.');return;}
+  const c=contacts.find(x=>x.id===id);
+  c.name=name;c.phone=phone;c.reminderDays=days;
+  editingContact=null;save();render();
+}
 
 function sendWA(id){
   const c=contacts.find(x=>x.id===id);
@@ -156,7 +177,6 @@ function sendOwnWA(id){
   window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');
 }
 
-// ── Import from iPhone Contacts API ───────────────────────────────────────
 async function importContacts(){
   if(!('contacts' in navigator&&'ContactsManager' in window)){
     alert('Contact picker is only available in Safari on iOS 14.5+.\n\nTry using the 📂 File import instead — export your contacts as a VCF from your Mac\'s Contacts app.');
@@ -178,16 +198,12 @@ async function importContacts(){
   }catch(e){if(e.name!=='AbortError')alert('Could not access contacts: '+e.message);}
 }
 
-// ── Import from VCF / CSV file ─────────────────────────────────────────────
 function importFromFile(){
   const input=document.createElement('input');
-  input.type='file';
-  input.accept='.vcf,.csv';
+  input.type='file';input.accept='.vcf,.csv';
   input.onchange=async e=>{
-    const file=e.target.files[0];
-    if(!file)return;
-    const text=await file.text();
-    let added=0;
+    const file=e.target.files[0];if(!file)return;
+    const text=await file.text();let added=0;
     if(file.name.toLowerCase().endsWith('.vcf')||text.trim().startsWith('BEGIN:VCARD')){
       const cards=text.split(/BEGIN:VCARD/i).filter(c=>c.trim());
       cards.forEach(card=>{
@@ -211,8 +227,7 @@ function importFromFile(){
       if(nameIdx===-1||phoneIdx===-1){alert('CSV needs columns for name and phone/tel/mobile.\n\nFound columns: '+headers.join(', '));return;}
       lines.slice(1).forEach(line=>{
         const cols=line.split(',').map(c=>c.trim().replace(/"/g,''));
-        const name=cols[nameIdx]||'';
-        const phone=cols[phoneIdx]||'';
+        const name=cols[nameIdx]||'';const phone=cols[phoneIdx]||'';
         if(!name||!phone)return;
         if(!contacts.some(x=>x.phone===phone||x.name===name)){
           contacts.push({id:Date.now()+Math.random(),name,phone,tags:[],lastNote:'',lastContact:null,reminderDays:30});
@@ -250,21 +265,16 @@ async function requestNotifications(){
   const result=await Notification.requestPermission();
   notifPermission=result;localStorage.setItem('wa-notif',result);
   if(result==='granted'){scheduleCheck();alert('Notifications enabled!');}
-  else alert('Permission denied. Enable in iPhone Settings → Apps → Safari → Notifications.');
+  else alert('Permission denied. Enable in iPhone Settings → Apps → Safari → [your app] → Notifications.');
   render();
 }
 function scheduleCheck(){checkReminders();localStorage.setItem('wa-last-check',Date.now());}
-function checkReminders(){
-  if(!navigator.serviceWorker?.controller)return;
-  navigator.serviceWorker.controller.postMessage({type:'CHECK_REMINDERS',contacts});
-}
-function checkOnOpen(){
-  const last=parseInt(localStorage.getItem('wa-last-check')||'0');
-  if(notifPermission==='granted'&&Date.now()-last>1000*60*60*12)scheduleCheck();
-}
+function checkReminders(){if(!navigator.serviceWorker?.controller)return;navigator.serviceWorker.controller.postMessage({type:'CHECK_REMINDERS',contacts});}
+function checkOnOpen(){const last=parseInt(localStorage.getItem('wa-last-check')||'0');if(notifPermission==='granted'&&Date.now()-last>1000*60*60*12)scheduleCheck();}
 
 function contactRowHTML(c){
   const isExp=expanded===c.id;
+  const isEditing=editingContact===c.id;
   const days=daysAgo(c.lastContact);
   const isKey=c.tags.includes('key');
   const dc=isKey?dotColor(days,c.reminderDays):'#334155';
@@ -274,51 +284,73 @@ function contactRowHTML(c){
   let expandHTML='';
 
   if(isExp){
-    const tagsHTML=['key','work','friend','family','client','mentor'].map(t=>tagBtn(t,c.tags.includes(t))).join('');
-    const freqHTML=isKey?`<div class="section-label">REMINDER FREQUENCY</div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
-        ${[7,14,21,30,60,90].map(d=>`<button class="tag-btn" onclick="updateFrequency(${c.id},${d})"
-          style="${c.reminderDays===d?'background:#6366f133;color:#818cf8;border-color:#6366f155':''}">
-          ${d===7?'Weekly':d===14?'2 wks':d===21?'3 wks':d===30?'Monthly':d===60?'2 mo':'Quarterly'}</button>`).join('')}
+    // ── Edit mode ──
+    if(isEditing){
+      expandHTML=`<div class="expand">
+        <div class="section-label" style="color:#f59e0b">EDIT CONTACT</div>
+        <div class="edit-card">
+          <div class="form-field">
+            <div class="form-label">NAME</div>
+            <input class="form-input" id="ec-name" type="text" value="${c.name.replace(/"/g,'&quot;')}">
+          </div>
+          <div class="form-field">
+            <div class="form-label">PHONE (with country code)</div>
+            <input class="form-input" id="ec-phone" type="tel" value="${c.phone}">
+          </div>
+          <div class="form-field">
+            <div class="form-label">REMIND EVERY (days)</div>
+            <input class="form-input" id="ec-days" type="number" value="${c.reminderDays}">
+          </div>
+          <div class="btn-row" style="margin-top:4px">
+            <button class="btn btn-save" onclick="saveEditContact(${c.id})" style="flex:1">Save Changes</button>
+            <button class="btn btn-cancel" onclick="cancelEditContact()">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+    } else {
+      // ── Normal expanded mode ──
+      const tagsHTML=['key','work','friend','family','client','mentor'].map(t=>tagBtn(t,c.tags.includes(t))).join('');
+      const freqHTML=isKey?`<div class="section-label">REMINDER FREQUENCY</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+          ${[7,14,21,30,60,90].map(d=>`<button class="tag-btn" onclick="updateFrequency(${c.id},${d})"
+            style="${c.reminderDays===d?'background:#6366f133;color:#818cf8;border-color:#6366f155':''}">
+            ${d===7?'Weekly':d===14?'2 wks':d===21?'3 wks':d===30?'Monthly':d===60?'2 mo':'Quarterly'}</button>`).join('')}
+        </div>`:'';
+      const noteHTML=editingNote===c.id
+        ?`<textarea id="note-ta" class="note-edit">${c.lastNote||''}</textarea>
+          <div class="btn-row"><button class="btn btn-save" onclick="saveNote(${c.id})">Save</button>
+          <button class="btn btn-cancel" onclick="editingNote=null;render()">Cancel</button></div>`
+        :`<div class="note-box ${c.lastNote?'has-note':''}" onclick="editingNote=${c.id};render()">${c.lastNote||'Add a note...'}</div>`;
+
+      const tabBar=`<div class="msg-tab-bar">
+        <button class="msg-tab" onclick="switchTab(${c.id},'ai')"
+          style="background:${tab==='ai'?'#6366f1':'#1e293b'};color:${tab==='ai'?'#fff':'#64748b'}">✨ AI Message</button>
+        <button class="msg-tab" onclick="switchTab(${c.id},'own')"
+          style="background:${tab==='own'?'#25D366':'#1e293b'};color:${tab==='own'?'#fff':'#64748b'}">✍️ Write Yourself</button>
+      </div>`;
+      const aiPanel=tab==='ai'?`<div class="msg-panel">
+        <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''} style="width:100%;margin-bottom:${msg&&msg!=='...'?'10px':'0'}">
+          ${msg==='...'?'✨ Writing...':'✨ Generate Message'}</button>
+        ${msg&&msg!=='...'?`<textarea class="msg-edit" id="msg-${c.id}">${msg}</textarea>
+          <button class="btn-wa" onclick="sendWA(${c.id})">${WA_SVG} Send on WhatsApp</button>`:''}
       </div>`:'';
-    const noteHTML=editingNote===c.id
-      ?`<textarea id="note-ta" class="note-edit">${c.lastNote||''}</textarea>
-        <div class="btn-row"><button class="btn btn-save" onclick="saveNote(${c.id})">Save</button>
-        <button class="btn btn-cancel" onclick="editingNote=null;render()">Cancel</button></div>`
-      :`<div class="note-box ${c.lastNote?'has-note':''}" onclick="editingNote=${c.id};render()">${c.lastNote||'Add a note...'}</div>`;
+      const ownPanel=tab==='own'?`<div class="msg-panel">
+        <textarea class="msg-edit" id="own-${c.id}" placeholder="Type your message here..." style="min-height:80px"></textarea>
+        <button class="btn-wa" onclick="sendOwnWA(${c.id})" style="background:#1a9e4a">${WA_SVG} Send on WhatsApp</button>
+      </div>`:'';
 
-    // Tab bar
-    const tabBar=`<div class="msg-tab-bar">
-      <button class="msg-tab" onclick="switchTab(${c.id},'ai')"
-        style="background:${tab==='ai'?'#6366f1':'#1e293b'};color:${tab==='ai'?'#fff':'#64748b'}">✨ AI Message</button>
-      <button class="msg-tab" onclick="switchTab(${c.id},'own')"
-        style="background:${tab==='own'?'#25D366':'#1e293b'};color:${tab==='own'?'#fff':'#64748b'}">✍️ Write Yourself</button>
-    </div>`;
-
-    // AI panel
-    const aiPanel=tab==='ai'?`<div class="msg-panel">
-      <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''} style="width:100%;margin-bottom:${msg&&msg!=='...'?'10px':'0'}">
-        ${msg==='...'?'✨ Writing...':'✨ Generate Message'}</button>
-      ${msg&&msg!=='...'?`<textarea class="msg-edit" id="msg-${c.id}">${msg}</textarea>
-        <button class="btn-wa" onclick="sendWA(${c.id})">${WA_SVG} Send on WhatsApp</button>`:''}
-    </div>`:'';
-
-    // Own message panel
-    const ownPanel=tab==='own'?`<div class="msg-panel">
-      <textarea class="msg-edit" id="own-${c.id}" placeholder="Type your message here..." style="min-height:80px"></textarea>
-      <button class="btn-wa" onclick="sendOwnWA(${c.id})" style="background:#1a9e4a">${WA_SVG} Send on WhatsApp</button>
-    </div>`:'';
-
-    expandHTML=`<div class="expand">
-      <div class="section-label">TAGS</div><div class="tags-row">${tagsHTML}</div>
-      ${freqHTML}
-      <div class="section-label">LAST INTERACTION</div>${noteHTML}
-      <div class="btn-row" style="margin-bottom:4px">
-        <button class="btn btn-contacted" onclick="markContacted(${c.id})">✓ Contacted</button>
-        <button class="btn btn-delete" onclick="deleteContact(${c.id})">🗑</button>
-      </div>
-      ${tabBar}${aiPanel}${ownPanel}
-    </div>`;
+      expandHTML=`<div class="expand">
+        <div class="section-label">TAGS</div><div class="tags-row">${tagsHTML}</div>
+        ${freqHTML}
+        <div class="section-label">LAST INTERACTION</div>${noteHTML}
+        <div class="btn-row" style="margin-bottom:4px">
+          <button class="btn btn-contacted" onclick="markContacted(${c.id})">✓ Contacted</button>
+          <button class="btn btn-edit" onclick="startEditContact(${c.id})">✏️ Edit</button>
+          <button class="btn btn-delete" onclick="deleteContact(${c.id})">🗑</button>
+        </div>
+        ${tabBar}${aiPanel}${ownPanel}
+      </div>`;
+    }
   }
 
   return`<div class="contact-wrap ${isExp?'open':''}" id="cw-${c.id}">
@@ -338,7 +370,7 @@ function contactRowHTML(c){
 }
 
 function setView(v){
-  currentView=v;expanded=null;showForm=false;
+  currentView=v;expanded=null;showForm=false;editingContact=null;
   document.querySelectorAll('.nav-btn').forEach((b,i)=>{b.classList.toggle('active',['dashboard','contacts','settings'][i]===v);});
   render();
 }
@@ -388,7 +420,6 @@ function render(){
     body.innerHTML=html;return;
   }
 
-  // Contacts view
   let html=`<div class="search-row">
     <input class="search" placeholder="Search…" value="${search}" oninput="search=this.value;render()"/>
     <button class="btn-import" onclick="importContacts()" style="background:#25D36622;border:1px solid #25D36644;color:#25D366">📱 Import</button>
