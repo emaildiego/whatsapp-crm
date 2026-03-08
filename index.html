@@ -53,8 +53,9 @@
     .btn-delete{background:#ef444411;border:1px solid #ef444433 !important;color:#ef4444}
     .btn-save{background:#6366f1;color:#fff}
     .btn-cancel{background:#1e293b;color:#64748b}
-    .msg-box{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px;margin-top:12px}
-    .msg-label{font-size:10px;color:#6366f1;font-weight:700;margin-bottom:6px}
+    .msg-tab-bar{display:flex;gap:0;margin-top:12px;border-radius:8px 8px 0 0;overflow:hidden;border:1px solid #334155;border-bottom:none}
+    .msg-tab{flex:1;padding:8px;font-size:11px;font-weight:700;border:none;cursor:pointer}
+    .msg-panel{background:#1e293b;border:1px solid #334155;border-radius:0 0 10px 10px;padding:12px}
     textarea.msg-edit{width:100%;background:transparent;border:none;color:#cbd5e1;font-size:12px;line-height:1.6;resize:vertical;outline:none;min-height:70px}
     .btn-wa{background:#25D366;color:#fff;border:none;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:700;font-size:12px;display:flex;align-items:center;gap:6px;margin-top:7px}
     .form-card{background:#1e293b;border:1px solid #6366f1;border-radius:12px;padding:16px;margin-bottom:12px}
@@ -62,10 +63,10 @@
     .form-field{margin-bottom:8px}
     .form-label{font-size:10px;color:#64748b;margin-bottom:3px}
     input.form-input{width:100%;background:#0f172a;border:1px solid #334155;border-radius:7px;padding:7px 10px;color:#f1f5f9;font-size:12px;outline:none}
-    .search-row{display:flex;gap:8px;margin-bottom:12px}
+    .search-row{display:flex;gap:6px;margin-bottom:12px}
     input.search{flex:1;background:#1e293b;border:1px solid #334155;border-radius:9px;padding:8px 12px;color:#f1f5f9;font-size:12px;outline:none}
     .btn-add{background:#6366f1;border:none;color:#fff;border-radius:9px;padding:8px 14px;cursor:pointer;font-weight:700;font-size:16px}
-    .btn-import{background:#25D36622;border:1px solid #25D36644;color:#25D366;border-radius:9px;padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
+    .btn-import{border-radius:9px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap}
     .dash-title{font-size:13px;font-weight:700;margin-bottom:2px}
     .dash-sub{font-size:11px;color:#475569;margin-bottom:14px}
     .section-header{display:flex;align-items:center;gap:6px;margin-bottom:8px}
@@ -103,8 +104,7 @@ let contacts=JSON.parse(localStorage.getItem(STORE)||'null')||[
   {id:1,name:'Sarah Johnson',phone:'+14155552671',tags:['work','key'],lastNote:'Just got promoted to VP of Marketing',lastContact:'2026-02-01',reminderDays:30},
   {id:2,name:'Mike Chen',phone:'+14155559823',tags:['friend','key'],lastNote:'Training for his first marathon in April',lastContact:'2026-01-15',reminderDays:30},
 ];
-let expanded=null,messages={},currentView='dashboard',editingNote=null,showForm=false,search='';
-let msgTab={}; // {id: 'ai' | 'own'}
+let expanded=null,messages={},msgTab={},currentView='dashboard',editingNote=null,showForm=false,search='';
 let apiKey=localStorage.getItem('wa-crm-apikey')||'';
 let notifPermission=localStorage.getItem('wa-notif')||'default';
 let formTags=[];
@@ -114,6 +114,8 @@ function daysAgo(d){if(!d)return 999;return Math.floor((Date.now()-new Date(d).g
 function dotColor(days,limit){if(days>=limit)return'#ef4444';if(days>=limit*0.75)return'#f59e0b';return'#22c55e';}
 function tagChip(t){const c=TAG_COLORS[t]||'#475569';return`<span class="tag" style="background:${c}33;color:${c}">${t==='key'?'⭐':t}</span>`;}
 function tagBtn(t,active){const c=TAG_COLORS[t]||'#475569';return`<button class="tag-btn" onclick="toggleTag(${expanded},'${t}')" style="${active?`background:${c}33;color:${c};border-color:${c}55`:''}">${t==='key'?'⭐ key':t}</button>`;}
+
+const WA_SVG=`<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>`;
 
 async function generateMessage(id){
   if(!apiKey){alert('Please add your Anthropic API key in ⚙ Settings first.');return;}
@@ -138,11 +140,28 @@ function markContacted(id){contacts.find(x=>x.id===id).lastContact=new Date().to
 function updateFrequency(id,days){contacts.find(x=>x.id===id).reminderDays=parseInt(days);save();render();}
 function deleteContact(id){if(!confirm('Delete this contact?'))return;contacts=contacts.filter(x=>x.id!==id);if(expanded===id)expanded=null;save();render();}
 function saveNote(id){const ta=document.getElementById('note-ta');if(ta)contacts.find(x=>x.id===id).lastNote=ta.value;editingNote=null;save();render();}
-function sendWA(id){const c=contacts.find(x=>x.id===id);const ta=document.getElementById(`msg-${id}`);const msg=ta?ta.value:(messages[id]||'');if(!msg.trim()){alert('Message is empty.');return;}window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');}
-function sendOwnWA(id){const c=contacts.find(x=>x.id===id);const ta=document.getElementById(`own-${id}`);const msg=ta?ta.value.trim():'';if(!msg){alert('Please type a message first.');return;}window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');}
 
+function sendWA(id){
+  const c=contacts.find(x=>x.id===id);
+  const ta=document.getElementById(`msg-${id}`);
+  const msg=ta?ta.value.trim():(messages[id]||'');
+  if(!msg){alert('Message is empty.');return;}
+  window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');
+}
+function sendOwnWA(id){
+  const c=contacts.find(x=>x.id===id);
+  const ta=document.getElementById(`own-${id}`);
+  const msg=ta?ta.value.trim():'';
+  if(!msg){alert('Please type a message first.');return;}
+  window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+// ── Import from iPhone Contacts API ───────────────────────────────────────
 async function importContacts(){
-  if(!('contacts' in navigator&&'ContactsManager' in window)){alert('Contact picker is only available in Safari on iOS 14.5+.\n\nMake sure you\'ve installed this app via "Add to Home Screen" in Safari.');return;}
+  if(!('contacts' in navigator&&'ContactsManager' in window)){
+    alert('Contact picker is only available in Safari on iOS 14.5+.\n\nTry using the 📂 File import instead — export your contacts as a VCF from your Mac\'s Contacts app.');
+    return;
+  }
   try{
     const sel=await navigator.contacts.select(['name','tel'],{multiple:true});
     let added=0;
@@ -159,6 +178,7 @@ async function importContacts(){
   }catch(e){if(e.name!=='AbortError')alert('Could not access contacts: '+e.message);}
 }
 
+// ── Import from VCF / CSV file ─────────────────────────────────────────────
 function importFromFile(){
   const input=document.createElement('input');
   input.type='file';
@@ -168,15 +188,14 @@ function importFromFile(){
     if(!file)return;
     const text=await file.text();
     let added=0;
-    if(file.name.endsWith('.vcf')||text.startsWith('BEGIN:VCARD')){
-      // Parse VCF
-      const cards=text.split('BEGIN:VCARD').filter(c=>c.trim());
+    if(file.name.toLowerCase().endsWith('.vcf')||text.trim().startsWith('BEGIN:VCARD')){
+      const cards=text.split(/BEGIN:VCARD/i).filter(c=>c.trim());
       cards.forEach(card=>{
-        const nameLine=card.match(/FN[;:]([^\r\n]+)/);
-        const telLine=card.match(/TEL[^:]*:([^\r\n]+)/);
-        if(!nameLine||!telLine)return;
+        const nameLine=card.match(/FN[;:]([^\r\n]+)/i);
+        const telLine=card.match(/TEL[^:\r\n]*:([^\r\n]+)/i);
+        if(!nameLine)return;
         const name=nameLine[1].trim();
-        const phone=telLine[1].trim().replace(/\s/g,'');
+        const phone=(telLine?telLine[1].trim():'').replace(/\s/g,'');
         if(!phone)return;
         if(!contacts.some(x=>x.phone===phone||x.name===name)){
           contacts.push({id:Date.now()+Math.random(),name,phone,tags:[],lastNote:'',lastContact:null,reminderDays:30});
@@ -184,12 +203,12 @@ function importFromFile(){
         }
       });
     } else {
-      // Parse CSV — expects columns: name, phone (flexible header matching)
       const lines=text.split('\n').filter(l=>l.trim());
+      if(lines.length<2){alert('CSV appears empty.');return;}
       const headers=lines[0].toLowerCase().split(',').map(h=>h.trim().replace(/"/g,''));
       const nameIdx=headers.findIndex(h=>h.includes('name')||h.includes('first'));
       const phoneIdx=headers.findIndex(h=>h.includes('phone')||h.includes('tel')||h.includes('mobile'));
-      if(nameIdx===-1||phoneIdx===-1){alert('CSV must have columns for name and phone/tel/mobile.');return;}
+      if(nameIdx===-1||phoneIdx===-1){alert('CSV needs columns for name and phone/tel/mobile.\n\nFound columns: '+headers.join(', '));return;}
       lines.slice(1).forEach(line=>{
         const cols=line.split(',').map(c=>c.trim().replace(/"/g,''));
         const name=cols[nameIdx]||'';
@@ -201,7 +220,9 @@ function importFromFile(){
         }
       });
     }
-    save();alert(`Imported ${added} new contact${added!==1?'s':''}.`);render();
+    save();
+    alert(added>0?`✅ Imported ${added} new contact${added!==1?'s':''}!`:'No new contacts found — they may already exist in the app.');
+    render();
   };
   input.click();
 }
@@ -228,7 +249,7 @@ async function requestNotifications(){
   if(!('Notification' in window)){alert('Notifications require Safari on iOS 16.4+ with the app installed via Add to Home Screen.');return;}
   const result=await Notification.requestPermission();
   notifPermission=result;localStorage.setItem('wa-notif',result);
-  if(result==='granted'){scheduleCheck();alert('Notifications enabled! You\'ll be reminded for overdue contacts each time you open the app.');}
+  if(result==='granted'){scheduleCheck();alert('Notifications enabled!');}
   else alert('Permission denied. Enable in iPhone Settings → Apps → Safari → Notifications.');
   render();
 }
@@ -248,8 +269,10 @@ function contactRowHTML(c){
   const isKey=c.tags.includes('key');
   const dc=isKey?dotColor(days,c.reminderDays):'#334155';
   const msg=messages[c.id]||'';
+  const tab=msgTab[c.id]||'ai';
   const notePH=c.lastNote?`"${c.lastNote}"`:c.phone;
   let expandHTML='';
+
   if(isExp){
     const tagsHTML=['key','work','friend','family','client','mentor'].map(t=>tagBtn(t,c.tags.includes(t))).join('');
     const freqHTML=isKey?`<div class="section-label">REMINDER FREQUENCY</div>
@@ -263,35 +286,41 @@ function contactRowHTML(c){
         <div class="btn-row"><button class="btn btn-save" onclick="saveNote(${c.id})">Save</button>
         <button class="btn btn-cancel" onclick="editingNote=null;render()">Cancel</button></div>`
       :`<div class="note-box ${c.lastNote?'has-note':''}" onclick="editingNote=${c.id};render()">${c.lastNote||'Add a note...'}</div>`;
-    const tab=msgTab[c.id]||'ai';
-    const waBtn=`<button class="btn-wa" onclick="sendWA(${c.id})">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        Send on WhatsApp</button>`;
-    const tabBar=`<div style="display:flex;gap:0;margin-top:12px;border-radius:8px;overflow:hidden;border:1px solid #334155">
-      <button onclick="switchTab(${c.id},'ai')" style="flex:1;padding:7px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:${tab==='ai'?'#6366f1':'#1e293b'};color:${tab==='ai'?'#fff':'#64748b'}">✨ AI Message</button>
-      <button onclick="switchTab(${c.id},'own')" style="flex:1;padding:7px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:${tab==='own'?'#25D366':'#1e293b'};color:${tab==='own'?'#fff':'#64748b'}">✍️ Write Yourself</button>
+
+    // Tab bar
+    const tabBar=`<div class="msg-tab-bar">
+      <button class="msg-tab" onclick="switchTab(${c.id},'ai')"
+        style="background:${tab==='ai'?'#6366f1':'#1e293b'};color:${tab==='ai'?'#fff':'#64748b'}">✨ AI Message</button>
+      <button class="msg-tab" onclick="switchTab(${c.id},'own')"
+        style="background:${tab==='own'?'#25D366':'#1e293b'};color:${tab==='own'?'#fff':'#64748b'}">✍️ Write Yourself</button>
     </div>`;
-    const aiPanel=tab==='ai'?`<div class="msg-box" style="border-top:none;border-radius:0 0 10px 10px;margin-top:0">
-      <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''} style="width:100%;margin-bottom:${msg?'10px':'0'}">✨ ${msg==='...'?'Writing...':'Generate Message'}</button>
-      ${msg&&msg!=='...'?`<textarea class="msg-edit" id="msg-${c.id}">${msg}</textarea>${waBtn}`:''} 
+
+    // AI panel
+    const aiPanel=tab==='ai'?`<div class="msg-panel">
+      <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''} style="width:100%;margin-bottom:${msg&&msg!=='...'?'10px':'0'}">
+        ${msg==='...'?'✨ Writing...':'✨ Generate Message'}</button>
+      ${msg&&msg!=='...'?`<textarea class="msg-edit" id="msg-${c.id}">${msg}</textarea>
+        <button class="btn-wa" onclick="sendWA(${c.id})">${WA_SVG} Send on WhatsApp</button>`:''}
     </div>`:'';
-    const ownPanel=tab==='own'?`<div class="msg-box" style="border-top:none;border-radius:0 0 10px 10px;margin-top:0">
-      <textarea class="msg-edit" id="own-${c.id}" placeholder="Type your message here..."></textarea>
-      <button class="btn-wa" onclick="sendOwnWA(${c.id})" style="background:#1a9e4a">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        Send on WhatsApp</button>
+
+    // Own message panel
+    const ownPanel=tab==='own'?`<div class="msg-panel">
+      <textarea class="msg-edit" id="own-${c.id}" placeholder="Type your message here..." style="min-height:80px"></textarea>
+      <button class="btn-wa" onclick="sendOwnWA(${c.id})" style="background:#1a9e4a">${WA_SVG} Send on WhatsApp</button>
     </div>`:'';
+
     expandHTML=`<div class="expand">
       <div class="section-label">TAGS</div><div class="tags-row">${tagsHTML}</div>
       ${freqHTML}
       <div class="section-label">LAST INTERACTION</div>${noteHTML}
-      <div class="btn-row">
+      <div class="btn-row" style="margin-bottom:4px">
         <button class="btn btn-contacted" onclick="markContacted(${c.id})">✓ Contacted</button>
         <button class="btn btn-delete" onclick="deleteContact(${c.id})">🗑</button>
       </div>
       ${tabBar}${aiPanel}${ownPanel}
     </div>`;
   }
+
   return`<div class="contact-wrap ${isExp?'open':''}" id="cw-${c.id}">
     <div class="contact-row" onclick="toggleExpand(${c.id})">
       <div class="avatar">${c.name[0]}</div>
@@ -323,7 +352,7 @@ function render(){
     body.innerHTML=`
       <div id="settings-panel">
         <h3>🔔 Push Notifications</h3>
-        <p>Get notified when it's time to reach out to a key contact.<br>Requires iOS 16.4+ with the app installed via <strong>Add to Home Screen</strong> in Safari.</p>
+        <p>Get notified when it's time to reach out to a key contact.<br>Requires iOS 16.4+ with the app installed via <strong>Add to Home Screen</strong>.</p>
         <p>Status: <strong style="color:#f1f5f9">${ns}</strong></p>
         ${notifPermission==='granted'
           ?`<button class="btn btn-contacted" onclick="checkReminders()" style="width:100%">🔔 Test — Check Now</button>`
@@ -333,13 +362,18 @@ function render(){
       </div>
       <div id="settings-panel">
         <h3>🔑 Anthropic API Key</h3>
-        <p>Required for AI message generation. Free at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
+        <p>Required for AI message generation. Get one at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
         <input class="form-input" id="api-key-input" type="password" placeholder="sk-ant-..." value="${apiKey}" style="margin-bottom:8px"/>
         <button class="btn btn-save" onclick="saveKey()" style="width:100%">Save Key</button>
       </div>
       <div id="settings-panel">
+        <h3>📂 Import Contacts from File</h3>
+        <p>Export contacts from your Mac's Contacts app as a <strong>.vcf</strong> file, AirDrop it to your iPhone, then tap below to import.</p>
+        <button class="btn btn-save" onclick="importFromFile()" style="width:100%;background:#334155">📂 Import VCF / CSV File</button>
+      </div>
+      <div id="settings-panel">
         <h3>📱 Install as iPhone App</h3>
-        <p>1. Open this URL in <strong>Safari</strong> on your iPhone<br>2. Tap the Share button (box with arrow ↗) at the bottom<br>3. Scroll down and tap <strong>"Add to Home Screen"</strong><br>4. Tap <strong>Add</strong> — it now lives on your home screen!</p>
+        <p>1. Open this URL in <strong>Safari</strong><br>2. Tap the Share button ↗ at the bottom<br>3. Tap <strong>"Add to Home Screen"</strong><br>4. Tap <strong>Add</strong></p>
       </div>`;
     return;
   }
@@ -354,12 +388,14 @@ function render(){
     body.innerHTML=html;return;
   }
 
+  // Contacts view
   let html=`<div class="search-row">
     <input class="search" placeholder="Search…" value="${search}" oninput="search=this.value;render()"/>
-    <button class="btn-import" onclick="importContacts()">📱 Import</button>
-    <button class="btn-import" onclick="importFromFile()" style="background:#6366f122;border-color:#6366f144;color:#818cf8">📂 File</button>
+    <button class="btn-import" onclick="importContacts()" style="background:#25D36622;border:1px solid #25D36644;color:#25D366">📱 Import</button>
+    <button class="btn-import" onclick="importFromFile()" style="background:#6366f122;border:1px solid #6366f144;color:#818cf8">📂 File</button>
     <button class="btn-add" onclick="showForm=!showForm;render()">+</button>
   </div>`;
+
   if(showForm){
     html+=`<div class="form-card">
       <div class="form-title">NEW CONTACT</div>
@@ -373,6 +409,7 @@ function render(){
       </div>
     </div>`;
   }
+
   html+=filtered.length?filtered.map(contactRowHTML).join(''):`<div class="empty">No contacts found</div>`;
   body.innerHTML=html;
   if(showForm)renderFormTags();
