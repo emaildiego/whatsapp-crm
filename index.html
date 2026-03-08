@@ -136,7 +136,8 @@ function markContacted(id){contacts.find(x=>x.id===id).lastContact=new Date().to
 function updateFrequency(id,days){contacts.find(x=>x.id===id).reminderDays=parseInt(days);save();render();}
 function deleteContact(id){if(!confirm('Delete this contact?'))return;contacts=contacts.filter(x=>x.id!==id);if(expanded===id)expanded=null;save();render();}
 function saveNote(id){const ta=document.getElementById('note-ta');if(ta)contacts.find(x=>x.id===id).lastNote=ta.value;editingNote=null;save();render();}
-function sendWA(id){const c=contacts.find(x=>x.id===id);const ta=document.getElementById(`msg-${id}`);const msg=ta?ta.value:(messages[id]||'');window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');}
+function sendWA(id){const c=contacts.find(x=>x.id===id);const ta=document.getElementById(`msg-${id}`);const msg=ta?ta.value:(messages[id]||'');if(!msg.trim()){alert('Message is empty.');return;}window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');}
+function sendOwnWA(id){const c=contacts.find(x=>x.id===id);const ta=document.getElementById(`own-${id}`);const msg=ta?ta.value.trim():'';if(!msg){alert('Please type a message first.');return;}window.open(`https://wa.me/${c.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank');}
 
 async function importContacts(){
   if(!('contacts' in navigator&&'ContactsManager' in window)){alert('Contact picker is only available in Safari on iOS 14.5+.\n\nMake sure you\'ve installed this app via "Add to Home Screen" in Safari.');return;}
@@ -154,6 +155,53 @@ async function importContacts(){
     });
     save();alert(`Imported ${added} new contact${added!==1?'s':''}.`);render();
   }catch(e){if(e.name!=='AbortError')alert('Could not access contacts: '+e.message);}
+}
+
+function importFromFile(){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='.vcf,.csv';
+  input.onchange=async e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const text=await file.text();
+    let added=0;
+    if(file.name.endsWith('.vcf')||text.startsWith('BEGIN:VCARD')){
+      // Parse VCF
+      const cards=text.split('BEGIN:VCARD').filter(c=>c.trim());
+      cards.forEach(card=>{
+        const nameLine=card.match(/FN[;:]([^\r\n]+)/);
+        const telLine=card.match(/TEL[^:]*:([^\r\n]+)/);
+        if(!nameLine||!telLine)return;
+        const name=nameLine[1].trim();
+        const phone=telLine[1].trim().replace(/\s/g,'');
+        if(!phone)return;
+        if(!contacts.some(x=>x.phone===phone||x.name===name)){
+          contacts.push({id:Date.now()+Math.random(),name,phone,tags:[],lastNote:'',lastContact:null,reminderDays:30});
+          added++;
+        }
+      });
+    } else {
+      // Parse CSV — expects columns: name, phone (flexible header matching)
+      const lines=text.split('\n').filter(l=>l.trim());
+      const headers=lines[0].toLowerCase().split(',').map(h=>h.trim().replace(/"/g,''));
+      const nameIdx=headers.findIndex(h=>h.includes('name')||h.includes('first'));
+      const phoneIdx=headers.findIndex(h=>h.includes('phone')||h.includes('tel')||h.includes('mobile'));
+      if(nameIdx===-1||phoneIdx===-1){alert('CSV must have columns for name and phone/tel/mobile.');return;}
+      lines.slice(1).forEach(line=>{
+        const cols=line.split(',').map(c=>c.trim().replace(/"/g,''));
+        const name=cols[nameIdx]||'';
+        const phone=cols[phoneIdx]||'';
+        if(!name||!phone)return;
+        if(!contacts.some(x=>x.phone===phone||x.name===name)){
+          contacts.push({id:Date.now()+Math.random(),name,phone,tags:[],lastNote:'',lastContact:null,reminderDays:30});
+          added++;
+        }
+      });
+    }
+    save();alert(`Imported ${added} new contact${added!==1?'s':''}.`);render();
+  };
+  input.click();
 }
 
 function toggleFormTag(t){formTags=formTags.includes(t)?formTags.filter(x=>x!==t):[...formTags,t];renderFormTags();}
@@ -213,22 +261,30 @@ function contactRowHTML(c){
         <div class="btn-row"><button class="btn btn-save" onclick="saveNote(${c.id})">Save</button>
         <button class="btn btn-cancel" onclick="editingNote=null;render()">Cancel</button></div>`
       :`<div class="note-box ${c.lastNote?'has-note':''}" onclick="editingNote=${c.id};render()">${c.lastNote||'Add a note...'}</div>`;
+    const waBtn=`<button class="btn-wa" onclick="sendWA(${c.id})">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Send on WhatsApp</button>`;
     const msgHTML=msg?`<div class="msg-box">
       <div class="msg-label">AI MESSAGE</div>
       <textarea class="msg-edit" id="msg-${c.id}">${msg==='...'?'Generating...':msg}</textarea>
-      ${msg!=='...'?`<button class="btn-wa" onclick="sendWA(${c.id})">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        Send on WhatsApp</button>`:''}
+      ${msg!=='...'?waBtn:''}
       </div>`:'';
+    const ownMsgHTML=`<div class="msg-box" style="margin-top:8px">
+      <div class="msg-label" style="color:#25D366">YOUR MESSAGE</div>
+      <textarea class="msg-edit" id="own-${c.id}" placeholder="Type your own message here..."></textarea>
+      <button class="btn-wa" onclick="sendOwnWA(${c.id})" style="background:#1a9e4a">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Send on WhatsApp</button>
+      </div>`;
     expandHTML=`<div class="expand">
       <div class="section-label">TAGS</div><div class="tags-row">${tagsHTML}</div>
       ${freqHTML}
       <div class="section-label">LAST INTERACTION</div>${noteHTML}
       <div class="btn-row">
-        <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''}>✨ ${msg==='...'?'Writing...':'Generate Message'}</button>
+        <button class="btn btn-ai" onclick="generateMessage(${c.id})" ${msg==='...'?'disabled':''}>✨ ${msg==='...'?'Writing...':'AI Message'}</button>
         <button class="btn btn-contacted" onclick="markContacted(${c.id})">✓ Contacted</button>
         <button class="btn btn-delete" onclick="deleteContact(${c.id})">🗑</button>
-      </div>${msgHTML}
+      </div>${msgHTML}${ownMsgHTML}
     </div>`;
   }
   return`<div class="contact-wrap ${isExp?'open':''}" id="cw-${c.id}">
@@ -295,7 +351,8 @@ function render(){
 
   let html=`<div class="search-row">
     <input class="search" placeholder="Search…" value="${search}" oninput="search=this.value;render()"/>
-    <button class="btn-import" onclick="importContacts()">📋 Import</button>
+    <button class="btn-import" onclick="importContacts()">📱 Import</button>
+    <button class="btn-import" onclick="importFromFile()" style="background:#6366f122;border-color:#6366f144;color:#818cf8">📂 File</button>
     <button class="btn-add" onclick="showForm=!showForm;render()">+</button>
   </div>`;
   if(showForm){
